@@ -1,0 +1,74 @@
+[project]
+name = "ru2sql"
+version = "0.1.0"
+description = "Russian-to-SQL generative model for graduation thesis"
+authors = [{ name = "Danis", email = "danis.digger@gmail.com" }]
+requires-python = ">=3.10,<3.13"
+readme = "README.md"
+
+dependencies = [
+    # API
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.4.0",
+
+    # SQL parsing / validation
+    "sqlglot>=25.0.0",
+
+    # Data
+    "datasets>=2.20.0",
+    "pandas>=2.2.0",
+
+    # ML inference (CPU-friendly versions for desktop/laptop)
+    # Heavy training deps (bitsandbytes, peft, trl) live in [training] and run on Kaggle
+    "torch>=2.3.0",
+    "transformers>=4.44.0",
+    "accelerate>=0.33.0",
+    "peft>=0.12.0",  # for loading LoRA adapter at inference time
+
+    # Misc
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",  # for GigaChat/OpenAI API client
+    "tqdm>=4.66.0",
+
+    # Интерфейс
+    "streamlit>=1.35.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.6.0",
+    "ipykernel>=6.29.0",
+    "matplotlib>=3.9.0",
+    "seaborn>=0.13.0",
+]
+
+# Heavy GPU-only deps. Install on Kaggle: `pip install -e .[training]`
+training = [
+    "bitsandbytes>=0.43.0",
+    "trl>=0.10.0",
+    "wandb>=0.17.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

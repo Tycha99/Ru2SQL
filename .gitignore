@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.python-version
+
+# uv
+.uv/
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# ML artifacts
+checkpoints/
+wandb/
+*.bin
+*.safetensors
+*.gguf
+
+# Data
+data/pauq/
+data/databases/
+data/processed/
+data/*.json
+data/*.sqlite
+data/*.db
+# Демо-база нужна в репозитории
+!data/demo/sales.sqlite
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Outputs
+outputs/
+results/
