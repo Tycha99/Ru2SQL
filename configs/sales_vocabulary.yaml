@@ -1,0 +1,79 @@
+# Бизнес-словарь для демо-базы sales.sqlite
+# Загрузи этот файл в приложении через боковую панель → «Применить словарь»
+
+company: "Демо: Интернет-магазин электроники"
+
+# ──────────────────────────────────────────────
+# СХЕМА (справочная часть — влияет на промпт)
+# ──────────────────────────────────────────────
+#
+# customers  : id, name, city, phone, email, created_at
+# managers   : id, name, department
+# products   : id, name, category, price, is_active
+# orders     : id, customer_id, manager_id, AMOUNT, status, order_date
+# order_items: id, order_id, product_id, quantity, price
+#
+# ВАЖНО:
+#   orders.amount    — итоговая сумма заказа в рублях (считается как сумма позиций)
+#   order_items.price — цена единицы товара (НЕ итог позиции)
+#   order_items.quantity — количество штук
+#   Итог позиции = order_items.quantity * order_items.price
+#   В order_items НЕТ колонки amount — только в orders!
+
+# ──────────────────────────────────────────────
+# БИЗНЕС-ТЕРМИНЫ
+# ──────────────────────────────────────────────
+terms:
+  выручка: >
+    SUM(orders.amount) WHERE orders.status = 'paid'.
+    Используй таблицу orders, колонку amount. НЕ используй order_items для расчёта выручки если не нужна детализация по товарам.
+  оборот: >
+    SUM(orders.amount) по всем заказам независимо от статуса.
+  средний чек: >
+    AVG(orders.amount) WHERE orders.status = 'paid'.
+  количество заказов: >
+    COUNT(*) FROM orders. Если нужны только оплаченные — добавь WHERE status = 'paid'.
+  топ клиентов: >
+    GROUP BY customers.id, customers.name ORDER BY SUM(orders.amount) DESC LIMIT N.
+    JOIN orders ON orders.customer_id = customers.id WHERE orders.status = 'paid'.
+  топ товаров: >
+    GROUP BY products.id, products.name ORDER BY SUM(order_items.quantity) DESC LIMIT N.
+    JOIN order_items ON order_items.product_id = products.id
+    JOIN orders ON orders.id = order_items.order_id WHERE orders.status = 'paid'.
+  выручка по товару: >
+    SUM(order_items.quantity * order_items.price) GROUP BY products.name.
+    JOIN orders ON orders.id = order_items.order_id WHERE orders.status = 'paid'.
+  активный товар: "products.is_active = 1"
+  новый клиент: >
+    customers.created_at >= date('now', '-30 days').
+  этот год: "strftime('%Y', orders.order_date) = strftime('%Y', 'now')"
+  прошлый год: "strftime('%Y', orders.order_date) = CAST(strftime('%Y', 'now') - 1 AS TEXT)"
+  этот месяц: >
+    strftime('%Y-%m', orders.order_date) = strftime('%Y-%m', 'now').
+  январь 2025: "orders.order_date BETWEEN '2025-01-01' AND '2025-01-31'"
+  за период: "orders.order_date BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD'"
+  конверсия: >
+    CAST(SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100 FROM orders.
+
+# ──────────────────────────────────────────────
+# СТАНДАРТНЫЕ ФИЛЬТРЫ
+# ──────────────────────────────────────────────
+filters:
+  только_оплаченные: "orders.status = 'paid'"
+  только_активные_товары: "products.is_active = 1"
+
+# ──────────────────────────────────────────────
+# КРИТИЧЕСКИЕ ПРАВИЛА СХЕМЫ
+# ──────────────────────────────────────────────
+notes:
+  - "КРИТИЧНО: колонка 'amount' существует ТОЛЬКО в таблице 'orders'. В 'order_items' её НЕТ."
+  - "order_items содержит: id, order_id, product_id, quantity, price. Никаких других колонок."
+  - "Стоимость позиции заказа = order_items.quantity * order_items.price (не отдельная колонка)."
+  - "orders.amount — это уже посчитанная итоговая сумма всего заказа в рублях."
+  - "Даты хранятся как TEXT в формате 'YYYY-MM-DD'. Используй strftime() или BETWEEN для фильтрации."
+  - "Статусы заказов: 'paid' (оплачен), 'pending' (ожидает оплаты), 'cancelled' (отменён)."
+  - "Для выручки по умолчанию фильтруй orders.status = 'paid'."
+  - "Связи: orders.customer_id → customers.id, orders.manager_id → managers.id."
+  - "Связи: order_items.order_id → orders.id, order_items.product_id → products.id."
+  - "is_active: 1 = товар продаётся, 0 = снят с продажи (например, Принтер HP LaserJet)."
+  - "База содержит данные за период 2025-01-01 — 2026-04-30."

@@ -188,6 +188,16 @@ with st.sidebar:
             st.session_state.db_connector = connector
             st.session_state.db_executor = executor
             st.session_state.db_connection_string = cs
+            # Автоматически применяем словарь для демо-базы
+            if "sales" in cs and st.session_state.vocabulary is None:
+                try:
+                    demo_vocab_path = ROOT / "configs" / "example_vocabulary.yaml"
+                    if demo_vocab_path.exists():
+                        st.session_state.vocabulary = _load_vocab_from_yaml(
+                            demo_vocab_path.read_text(encoding="utf-8")
+                        )
+                except Exception:
+                    pass
             st.success(f"Подключено! Таблиц: {len(tables)}")
         except Exception as e:
             st.error(f"Ошибка подключения: {e}")

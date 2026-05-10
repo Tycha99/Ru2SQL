@@ -1,33 +1,60 @@
-# Бизнес-словарь компании — пример заполнения
-# Скопируй этот файл, переименуй под свою компанию и заполни своими терминами.
-# Путь к файлу указывается при запуске утилиты.
+# Бизнес-словарь для демо-базы (data/demo/sales.sqlite)
+# Загружается автоматически при подключении к демо-базе.
+#
+# Скопируй этот файл и переименуй под свою компанию.
+# Затем загрузи через боковую панель → «Применить словарь».
 
-company: "ООО Ромашка"
+company: "Демо: Интернет-магазин электроники"
 
-# Бизнес-термины и метрики
-# Ключ — слово/фраза как говорит аналитик
-# Значение — что это означает в терминах SQL / данных
+# ──────────────────────────────────────────────
+# СХЕМА ДЕМО-БАЗЫ (справка)
+# ──────────────────────────────────────────────
+# customers  : id, name, city, phone, email, created_at
+# managers   : id, name, department
+# products   : id, name, category, price, is_active
+# orders     : id, customer_id, manager_id, AMOUNT, status, order_date
+# order_items: id, order_id, product_id, quantity, price
+#
+# orders.amount      = итоговая сумма заказа (рублей)
+# order_items.price  = цена единицы товара
+# order_items.quantity = количество штук
+# Итог позиции = order_items.quantity * order_items.price
+# В order_items НЕТ колонки amount!
+
 terms:
-  выручка: "SUM(orders.amount) при условии orders.status = 'paid'"
+  выручка: >
+    SUM(orders.amount) WHERE orders.status = 'paid'.
+    Колонка amount есть только в таблице orders, не в order_items.
   оборот: "SUM(orders.amount) по всем заказам включая отменённые"
-  активный клиент: "клиент, совершивший хотя бы одну покупку за последние 90 дней"
-  новый клиент: "клиент, зарегистрированный менее 30 дней назад"
-  этот год: "YEAR(order_date) совпадает с текущим годом"
-  прошлый месяц: "месяц предшествующий текущему"
-  этот квартал: "текущий квартал календарного года (Q1=янв-март, Q2=апр-июн и т.д.)"
-  средний чек: "AVG(orders.amount) по оплаченным заказам"
-  конверсия: "доля оплаченных заказов от общего числа"
+  средний чек: "AVG(orders.amount) WHERE orders.status = 'paid'"
+  топ клиентов: >
+    GROUP BY customers.id, customers.name ORDER BY SUM(orders.amount) DESC LIMIT N.
+    JOIN customers ON orders.customer_id = customers.id WHERE orders.status = 'paid'.
+  топ товаров: >
+    GROUP BY products.name ORDER BY SUM(order_items.quantity) DESC LIMIT N.
+    JOIN order_items ON orders.id = order_items.order_id WHERE orders.status = 'paid'.
+  выручка по товарам: >
+    SUM(order_items.quantity * order_items.price) GROUP BY products.name.
+    Итог позиции считается как quantity * price из order_items.
+  количество заказов: "COUNT(*) FROM orders WHERE status = 'paid'"
+  активный товар: "products.is_active = 1"
+  этот год: "strftime('%Y', orders.order_date) = strftime('%Y', 'now')"
+  прошлый год: "strftime('%Y', orders.order_date) = CAST(strftime('%Y', 'now') - 1 AS TEXT)"
+  этот месяц: "strftime('%Y-%m', orders.order_date) = strftime('%Y-%m', 'now')"
+  конверсия: >
+    CAST(SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100 FROM orders.
 
-# Стандартные условия фильтрации (применяются по умолчанию если аналитик явно не указал иное)
 filters:
   только_оплаченные: "orders.status = 'paid'"
-  без_возвратов: "orders.is_return = 0 или orders.is_return IS NULL"
   только_активные_товары: "products.is_active = 1"
 
-# Дополнительные правила и особенности схемы
 notes:
-  - "Таблица orders содержит все заказы. Колонка amount — сумма в рублях."
-  - "Клиенты хранятся в таблице customers, товары — в products."
-  - "Связь заказ-товар через таблицу order_items (order_id, product_id, quantity, price)."
-  - "Даты хранятся в формате YYYY-MM-DD в колонке order_date."
-  - "Менеджеры хранятся в таблице managers, связь с заказами через orders.manager_id."
+  - "КРИТИЧНО: колонка 'amount' существует ТОЛЬКО в таблице 'orders'. В 'order_items' её НЕТ."
+  - "order_items содержит колонки: id, order_id, product_id, quantity, price. Никакой колонки amount."
+  - "Стоимость позиции заказа = order_items.quantity * order_items.price (отдельной колонки нет)."
+  - "Даты хранятся как TEXT 'YYYY-MM-DD'. Для фильтрации используй BETWEEN или strftime()."
+  - "Статусы заказов: 'paid' (оплачен), 'pending' (ожидает), 'cancelled' (отменён)."
+  - "Связи: orders.customer_id → customers.id, orders.manager_id → managers.id."
+  - "Связи: order_items.order_id → orders.id, order_items.product_id → products.id."
+  - "База данных: SQLite. Функции дат: strftime('%Y', date_col), date('now', '-N days')."
+  - "База содержит данные за 2025-01-01 — 2026-04-30, 8 клиентов, 4 менеджера, 10 товаров."
