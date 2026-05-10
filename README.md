@@ -3,9 +3,7 @@ title: Ru2SQL
 emoji: 🗄️
 colorFrom: blue
 colorTo: purple
-sdk: streamlit
-sdk_version: 1.35.0
-app_file: streamlit_app.py
+sdk: docker
 pinned: false
 ---
 
