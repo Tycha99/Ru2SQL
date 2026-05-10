@@ -17,8 +17,8 @@ ENV LORA_ADAPTER_PATH=Tyycha/qwen-coder-pauq-lora
 ENV BASE_MODEL_NAME=Qwen/Qwen2.5-Coder-3B-Instruct
 ENV DEVICE=cpu
 
-EXPOSE 8501
+EXPOSE 7860
 
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+HEALTHCHECK CMD curl --fail http://localhost:7860/_stcore/health
 
-ENTRYPOINT ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["streamlit", "run", "streamlit_app.py", "--server.port=7860", "--server.address=0.0.0.0"]
