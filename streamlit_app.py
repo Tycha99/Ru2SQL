@@ -63,6 +63,10 @@ st.markdown("""
         background: #1e1e2e;
         border-radius: 0 6px 6px 0;
     }
+    /* Скрыть кнопку Stop */
+    button[kind="stop"] {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
