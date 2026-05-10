@@ -1,14 +1,4 @@
-"""Streamlit-интерфейс утилиты Ru2SQL.
-
-Запуск:
-    streamlit run streamlit_app.py
-
-Что умеет:
-    - Подключиться к любой SQLite/PostgreSQL/MySQL базе данных
-    - Загрузить бизнес-словарь компании из YAML-файла или редактировать прямо в браузере
-    - Принять вопрос на русском → сгенерировать SQL → выполнить → показать результат
-    - Хранить историю запросов в текущей сессии
-"""
+"""Streamlit-интерфейс утилиты Ru2SQL."""
 
 from __future__ import annotations
 
@@ -18,7 +8,6 @@ from pathlib import Path
 
 import streamlit as st
 
-# Путь к src/
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
@@ -26,8 +15,8 @@ sys.path.insert(0, str(ROOT))
 # Конфигурация страницы
 # ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="Ru2SQL — Natural Language → SQL",
-    page_icon="🗄️",
+    page_title="Ru2SQL",
+    page_icon="assets/favicon.png" if (ROOT / "assets" / "favicon.png").exists() else None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -37,35 +26,163 @@ st.set_page_config(
 # ──────────────────────────────────────────────
 st.markdown("""
 <style>
+    /* ── Общий фон и типографика ── */
+    [data-testid="stAppViewContainer"] {
+        background-color: #0f1117;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #161b22;
+        border-right: 1px solid #21262d;
+    }
+
+    /* ── Шапка приложения ── */
+    .app-header {
+        padding: 28px 0 20px 0;
+        border-bottom: 1px solid #21262d;
+        margin-bottom: 28px;
+    }
+    .app-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: #e6edf3;
+        letter-spacing: -0.3px;
+        margin: 0 0 4px 0;
+        line-height: 1.3;
+    }
+    .app-subtitle {
+        font-size: 13px;
+        color: #7d8590;
+        margin: 0;
+        font-weight: 400;
+    }
+
+    /* ── Боковая панель ── */
+    .sidebar-section-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: #7d8590;
+        padding: 16px 0 8px 0;
+        margin: 0;
+    }
+    .sidebar-divider {
+        border: none;
+        border-top: 1px solid #21262d;
+        margin: 12px 0;
+    }
+
+    /* ── Статусы ── */
+    .status-ok {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #3fb950;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .status-err {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #f85149;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .status-warn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #d29922;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    /* ── SQL-блок ── */
     .sql-box {
-        background: #1e1e2e;
-        color: #cdd6f4;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        padding: 16px;
-        border-radius: 8px;
-        border-left: 4px solid #89b4fa;
+        background: #161b22;
+        color: #e6edf3;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        padding: 20px 24px;
+        border-radius: 6px;
+        border: 1px solid #21262d;
+        border-left: 3px solid #388bfd;
         white-space: pre-wrap;
+        margin: 12px 0;
+    }
+
+    /* ── Результирующая панель метрик ── */
+    .result-meta {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        padding: 12px 0;
+        border-top: 1px solid #21262d;
+        border-bottom: 1px solid #21262d;
+        margin: 16px 0;
+    }
+    .result-meta-item {
+        font-size: 12px;
+        color: #7d8590;
+    }
+    .result-meta-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #e6edf3;
+    }
+
+    /* ── История ── */
+    .history-entry {
+        border: 1px solid #21262d;
+        border-radius: 6px;
+        padding: 14px 16px;
         margin: 8px 0;
+        background: #161b22;
     }
-    .metric-card {
-        background: #313244;
-        padding: 12px 16px;
-        border-radius: 8px;
-        text-align: center;
+    .history-question {
+        font-size: 14px;
+        color: #e6edf3;
+        font-weight: 500;
+        margin-bottom: 6px;
     }
-    .status-ok  { color: #a6e3a1; font-weight: bold; }
-    .status-err { color: #f38ba8; font-weight: bold; }
-    .history-item {
-        border-left: 3px solid #89b4fa;
-        padding: 8px 12px;
-        margin: 6px 0;
-        background: #1e1e2e;
-        border-radius: 0 6px 6px 0;
+    .history-meta {
+        font-size: 12px;
+        color: #7d8590;
     }
-    /* Скрыть кнопку Stop */
+
+    /* ── Примеры запросов ── */
+    .examples-label {
+        font-size: 12px;
+        color: #7d8590;
+        margin: 16px 0 8px 0;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ── Вкладки ── */
+    [data-testid="stTabs"] button {
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    /* ── Кнопка Stop ── */
     button[kind="stop"] {
         display: none !important;
+    }
+
+    /* ── Убрать лишние отступы в header ── */
+    [data-testid="stHeader"] {
+        background: transparent;
+    }
+
+    /* ── Таблица данных ── */
+    [data-testid="stDataFrame"] {
+        border: 1px solid #21262d;
+        border-radius: 6px;
+        overflow: hidden;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -103,13 +220,14 @@ def _init_state():
         if k not in st.session_state:
             st.session_state[k] = v
 
+
 _init_state()
 
 
 # ──────────────────────────────────────────────
 # Вспомогательные функции
 # ──────────────────────────────────────────────
-@st.cache_resource(show_spinner="Загружаю модель… (~30 с на первый раз)")
+@st.cache_resource(show_spinner="Инициализация модели…")
 def _load_engine():
     from src.models.inference import InferenceEngine
     engine = InferenceEngine()
@@ -139,12 +257,10 @@ def _load_vocab_from_yaml(yaml_text: str):
 # Боковая панель
 # ──────────────────────────────────────────────
 with st.sidebar:
-    st.title("⚙️ Настройки")
+    st.markdown('<p class="sidebar-section-label">Модель</p>', unsafe_allow_html=True)
 
-    # ── Модель — загружается автоматически при старте ──
-    st.subheader("🤖 Модель")
     if not st.session_state.model_loaded:
-        with st.spinner("Загружаю модель…"):
+        with st.spinner("Инициализация…"):
             try:
                 st.session_state.engine = _load_engine()
                 st.session_state.model_loaded = True
@@ -152,47 +268,63 @@ with st.sidebar:
                 st.error(f"Ошибка загрузки модели: {e}")
 
     if st.session_state.model_loaded:
-        st.markdown('<span class="status-ok">✅ Модель готова</span>', unsafe_allow_html=True)
+        st.markdown(
+            '<span class="status-ok">✅ Qwen2.5-Coder-3B + QLoRA</span>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.markdown('<span class="status-err">⚠️ Модель не загружена</span>', unsafe_allow_html=True)
+        st.markdown(
+            '<span class="status-err">Модель не загружена</span>',
+            unsafe_allow_html=True,
+        )
 
-    st.divider()
+    st.markdown('<hr class="sidebar-divider">', unsafe_allow_html=True)
 
     # ── База данных ──
-    st.subheader("🗄️ База данных")
+    st.markdown('<p class="sidebar-section-label">База данных</p>', unsafe_allow_html=True)
 
-    db_type = st.radio("Тип подключения", ["SQLite файл", "Строка подключения"],
-                       horizontal=True)
+    db_type = st.radio(
+        "Тип подключения",
+        ["SQLite", "PostgreSQL / MySQL"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
 
-    if db_type == "SQLite файл":
-        uploaded = st.file_uploader("Загрузить .sqlite файл", type=["sqlite", "db"])
-        use_demo = st.checkbox("Использовать демо-базу", value=True)
-
+    if db_type == "SQLite":
+        use_demo = st.checkbox("Демо-база (sales.sqlite)", value=True)
         if use_demo:
             demo_path = ROOT / "data" / "demo" / "sales.sqlite"
             cs = str(demo_path)
-        elif uploaded:
-            import tempfile
-            tmp_db = Path(tempfile.mktemp(suffix=".sqlite"))
-            tmp_db.write_bytes(uploaded.read())
-            cs = str(tmp_db)
         else:
-            cs = ""
+            uploaded = st.file_uploader(
+                "Загрузить файл базы данных",
+                type=["sqlite", "db"],
+                label_visibility="collapsed",
+            )
+            if uploaded:
+                import tempfile
+                tmp_db = Path(tempfile.mktemp(suffix=".sqlite"))
+                tmp_db.write_bytes(uploaded.read())
+                cs = str(tmp_db)
+            else:
+                cs = ""
+                st.caption("Выберите .sqlite или .db файл")
     else:
         cs = st.text_input(
             "Строка подключения",
-            placeholder="postgresql://user:pass@localhost/mydb",
+            placeholder="postgresql://user:pass@host:5432/dbname",
             value=st.session_state.db_connection_string,
+            label_visibility="collapsed",
         )
+        st.caption("PostgreSQL: postgresql://  |  MySQL: mysql+pymysql://")
 
-    if cs and st.button("Подключиться к БД", use_container_width=True):
+    if cs and st.button("Подключиться", use_container_width=True, type="primary"):
         try:
             connector, executor = _connect_db(cs)
             tables = connector.list_tables()
             st.session_state.db_connector = connector
             st.session_state.db_executor = executor
             st.session_state.db_connection_string = cs
-            # Автоматически применяем словарь для демо-базы
             if "sales" in cs and st.session_state.vocabulary is None:
                 try:
                     demo_vocab_path = ROOT / "configs" / "example_vocabulary.yaml"
@@ -202,91 +334,104 @@ with st.sidebar:
                         )
                 except Exception:
                     pass
-            st.success(f"Подключено! Таблиц: {len(tables)}")
+            st.success(f"Подключено. Таблиц: {len(tables)}")
         except Exception as e:
             st.error(f"Ошибка подключения: {e}")
 
     if st.session_state.db_connector:
         tables = st.session_state.db_connector.list_tables()
-        st.markdown('<span class="status-ok">✅ БД подключена</span>', unsafe_allow_html=True)
-        with st.expander("Таблицы"):
+        st.markdown(
+            '<span class="status-ok">✅ База данных подключена</span>',
+            unsafe_allow_html=True,
+        )
+        with st.expander(f"Таблицы ({len(tables)})"):
             for t in tables:
-                st.code(t)
+                st.code(t, language=None)
 
-    st.divider()
+    st.markdown('<hr class="sidebar-divider">', unsafe_allow_html=True)
 
     # ── Бизнес-словарь ──
-    st.subheader("📖 Бизнес-словарь")
+    st.markdown('<p class="sidebar-section-label">Бизнес-словарь</p>', unsafe_allow_html=True)
 
     vocab_yaml = st.text_area(
-        "YAML-конфигурация",
+        "YAML-конфигурация терминов",
         value=st.session_state.vocab_yaml,
-        height=260,
-        help="Определите термины вашей компании — модель будет их учитывать при генерации SQL",
+        height=240,
+        help=(
+            "Опишите термины и правила вашей компании в формате YAML. "
+            "Модель будет учитывать их при генерации SQL-запросов."
+        ),
+        label_visibility="collapsed",
     )
     st.session_state.vocab_yaml = vocab_yaml
 
     if st.button("Применить словарь", use_container_width=True):
         try:
             st.session_state.vocabulary = _load_vocab_from_yaml(vocab_yaml)
-            st.success("Словарь применён!")
+            st.success("Словарь применён.")
         except Exception as e:
-            st.error(f"Ошибка в YAML: {e}")
+            st.error(f"Ошибка синтаксиса YAML: {e}")
 
     if st.session_state.vocabulary:
         v = st.session_state.vocabulary
-        st.markdown(f'<span class="status-ok">✅ Словарь: {v.company or "загружен"}</span>',
-                    unsafe_allow_html=True)
-        terms_count = len(v.terms)
-        if terms_count:
-            st.caption(f"{terms_count} терминов определено")
+        label = v.company if v.company else "Загружен"
+        st.markdown(
+            f'<span class="status-ok">✅ {label}</span>',
+            unsafe_allow_html=True,
+        )
+        if v.terms:
+            st.caption(f"Терминов: {len(v.terms)}")
 
 
 # ──────────────────────────────────────────────
-# Основная область
+# Основная область — заголовок
 # ──────────────────────────────────────────────
-st.title("🗄️ Ru2SQL — Бизнес-аналитика на русском языке")
-st.caption("Задайте вопрос на русском → получите SQL и данные из вашей базы")
+st.markdown("""
+<div class="app-header">
+    <p class="app-title">Ru2SQL — генеративная модель преобразования запросов<br>к базе данных на русском языке в запросы на языке SQL</p>
+    <p class="app-subtitle">Qwen2.5-Coder-3B-Instruct &nbsp;·&nbsp; QLoRA fine-tuning на PAUQ &nbsp;·&nbsp; SQLite / PostgreSQL / MySQL</p>
+</div>
+""", unsafe_allow_html=True)
 
-tab_query, tab_schema, tab_history = st.tabs(["💬 Запрос", "📐 Схема БД", "🕓 История"])
+tab_query, tab_schema, tab_history = st.tabs(["Запрос", "Схема базы данных", "История"])
 
 # ──────────── Вкладка: Запрос ────────────
 with tab_query:
     ready = st.session_state.model_loaded and st.session_state.db_connector is not None
 
     if not ready:
-        cols = st.columns(2)
-        with cols[0]:
-            if not st.session_state.model_loaded:
-                st.warning("⚠️ Загрузите модель в левой панели")
-        with cols[1]:
-            if st.session_state.db_connector is None:
-                st.warning("⚠️ Подключитесь к базе данных в левой панели")
+        missing = []
+        if not st.session_state.model_loaded:
+            missing.append("модель инициализируется")
+        if st.session_state.db_connector is None:
+            missing.append("база данных не подключена")
+        st.warning("Система не готова: " + ", ".join(missing) + ". Используйте панель слева.")
 
     question = st.text_area(
-        "Ваш вопрос",
+        "Вопрос на естественном языке",
         placeholder="Например: Какая выручка за январь этого года?",
-        height=100,
+        height=90,
         disabled=not ready,
+        label_visibility="visible",
     )
 
-    col_btn, col_hint = st.columns([1, 4])
+    col_btn, col_spacer = st.columns([1, 5])
     with col_btn:
-        run_btn = st.button("▶ Выполнить", type="primary",
-                            disabled=not ready or not question.strip(),
-                            use_container_width=True)
-    with col_hint:
-        if ready:
-            st.caption("Модель сгенерирует SQL и выполнит его на вашей БД")
+        run_btn = st.button(
+            "Выполнить",
+            type="primary",
+            disabled=not ready or not question.strip(),
+            use_container_width=True,
+        )
 
-    # Быстрые примеры
+    # Примеры для демо-базы
     if st.session_state.db_connection_string and "sales" in st.session_state.db_connection_string:
-        st.caption("💡 Попробуйте:")
+        st.markdown('<p class="examples-label">Примеры запросов</p>', unsafe_allow_html=True)
         example_cols = st.columns(3)
         examples = [
             "Какая выручка за 2026 год?",
             "Топ-5 клиентов по сумме заказов",
-            "Сколько заказов по каждому менеджеру?",
+            "Сколько заказов у каждого менеджера?",
         ]
         for i, ex in enumerate(examples):
             with example_cols[i]:
@@ -295,73 +440,68 @@ with tab_query:
                     run_btn = True
 
     if run_btn and question.strip():
-        engine = st.session_state.engine
+        engine    = st.session_state.engine
         connector = st.session_state.db_connector
-        executor = st.session_state.db_executor
-        vocab = st.session_state.vocabulary
+        executor  = st.session_state.db_executor
+        vocab     = st.session_state.vocabulary
 
-        # Обогащаем вопрос бизнес-словарём
         enriched_question = vocab.enrich_prompt(question) if vocab else question
-
-        # Получаем схему
         schema = connector.render_schema(include_samples=True)
 
-        with st.spinner("Генерирую SQL…"):
+        with st.spinner("Генерация SQL-запроса…"):
             t0 = time.time()
             result = engine.generate(schema, enriched_question)
             gen_time = time.time() - t0
 
-        st.subheader("Сгенерированный SQL")
+        st.markdown("**Сгенерированный SQL**")
         st.markdown(f'<div class="sql-box">{result.sql}</div>', unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2)
-        col1.metric("Время генерации", f"{gen_time:.1f} с")
-
-        # Выполняем SQL
+        qr = None
         if result.sql.strip():
-            with st.spinner("Выполняю запрос…"):
+            with st.spinner("Выполнение запроса…"):
                 qr = executor.run(result.sql)
 
-            if qr.success:
-                col2.metric("Строк в результате", qr.row_count)
-                st.subheader("Результат")
-                if qr.rows:
-                    import pandas as pd
-                    df = pd.DataFrame(qr.rows, columns=qr.columns)
-                    st.dataframe(df, use_container_width=True)
-                else:
-                    st.info("Запрос выполнен успешно, результат пустой")
-            else:
-                col2.error("Ошибка выполнения")
-                st.error(f"SQL ошибка: {qr.error}")
+        # Метрики
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Время генерации", f"{gen_time:.1f} с")
+        if qr:
+            c2.metric("Строк получено", qr.row_count if qr.success else "—")
+            c3.metric("Статус", "Успешно" if qr.success else "Ошибка")
 
-        # Добавляем в историю
+        if qr and qr.success:
+            if qr.rows:
+                import pandas as pd
+                st.markdown("**Результат**")
+                df = pd.DataFrame(qr.rows, columns=qr.columns)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("Запрос выполнен. Результат пустой.")
+        elif qr and not qr.success:
+            st.error(f"Ошибка выполнения SQL: {qr.error}")
+
         st.session_state.history.append({
             "question": question,
             "sql": result.sql,
-            "success": qr.success if result.sql.strip() else False,
-            "rows": qr.row_count if result.sql.strip() and qr.success else 0,
+            "success": qr.success if qr else False,
+            "rows": qr.row_count if qr and qr.success else 0,
             "time": gen_time,
         })
 
 # ──────────── Вкладка: Схема БД ────────────
 with tab_schema:
     if st.session_state.db_connector is None:
-        st.info("Подключитесь к базе данных в левой панели")
+        st.info("Подключитесь к базе данных через панель слева.")
     else:
         connector = st.session_state.db_connector
-        st.subheader("Структура базы данных")
-
         show_samples = st.toggle("Показывать примеры строк", value=True)
-        schema_text = connector.render_schema(include_samples=show_samples)
 
         for table in connector.get_schema(include_samples=show_samples):
-            with st.expander(f"📋 {table.name}  ({len(table.columns)} колонок)"):
+            with st.expander(f"{table.name}  —  {len(table.columns)} колонок"):
                 st.code(table.to_ddl(), language="sql")
                 if show_samples and table.sample_rows:
                     import pandas as pd
                     cols = [c.name for c in table.columns]
-                    st.caption("Примеры строк:")
+                    st.caption("Примеры данных:")
                     st.dataframe(
                         pd.DataFrame(table.sample_rows, columns=cols),
                         use_container_width=True,
@@ -371,19 +511,24 @@ with tab_schema:
 with tab_history:
     history = st.session_state.history
     if not history:
-        st.info("История запросов пуста. Задайте первый вопрос на вкладке «Запрос».")
+        st.info("История пуста. Выполните первый запрос на вкладке «Запрос».")
     else:
-        st.subheader(f"История запросов ({len(history)})")
-
-        if st.button("Очистить историю"):
-            st.session_state.history = []
-            st.rerun()
+        col_h, col_btn_h = st.columns([5, 1])
+        with col_h:
+            st.markdown(f"**Запросов в сессии: {len(history)}**")
+        with col_btn_h:
+            if st.button("Очистить", use_container_width=True):
+                st.session_state.history = []
+                st.rerun()
 
         for i, item in enumerate(reversed(history)):
-            status = "✅" if item["success"] else "❌"
-            with st.expander(f"{status} {item['question']}", expanded=(i == 0)):
+            status_icon = "✅" if item["success"] else "❌"
+            with st.expander(
+                f"{status_icon}  {item['question']}",
+                expanded=(i == 0),
+            ):
                 st.markdown(f'<div class="sql-box">{item["sql"]}</div>', unsafe_allow_html=True)
-                cols = st.columns(3)
-                cols[0].metric("Время генерации", f"{item['time']:.1f} с")
-                cols[1].metric("Строк", item["rows"])
-                cols[2].metric("Статус", "OK" if item["success"] else "Ошибка")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Время генерации", f"{item['time']:.1f} с")
+                c2.metric("Строк", item["rows"])
+                c3.metric("Статус", "Успешно" if item["success"] else "Ошибка")
