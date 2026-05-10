@@ -78,40 +78,14 @@ st.markdown("""
     .status-ok  { color: #3fb950; font-size: 13px; font-weight: 600; }
     .status-err { color: #f85149; font-size: 13px; font-weight: 600; }
 
-    /* ── DB-переключатель: стилизуем radio как сегментированные кнопки ── */
-    div[data-testid="stRadio"] > label { display: none; }
+    /* ── DB-переключатель ── */
     div[data-testid="stRadio"] > div {
-        display: flex;
-        gap: 0;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        overflow: hidden;
-        background: #0d1117;
+        gap: 4px;
     }
     div[data-testid="stRadio"] > div > label {
-        flex: 1;
-        display: flex !important;
-        align-items: center;
-        justify-content: center;
-        padding: 8px 4px;
-        font-size: 12px;
-        font-weight: 500;
-        color: #7d8590;
-        cursor: pointer;
-        border-right: 1px solid #30363d;
-        transition: background 0.15s, color 0.15s;
-        text-align: center;
+        font-size: 14px;
+        padding: 4px 0;
     }
-    div[data-testid="stRadio"] > div > label:last-child { border-right: none; }
-    div[data-testid="stRadio"] > div > label:has(input:checked) {
-        background: #21262d;
-        color: #e6edf3;
-    }
-    div[data-testid="stRadio"] > div > label:hover:not(:has(input:checked)) {
-        background: #161b22;
-        color: #c9d1d9;
-    }
-    div[data-testid="stRadio"] > div > label > div:first-child { display: none; }
 
     /* ── Кнопка словаря ── */
     .vocab-status {
@@ -224,7 +198,7 @@ def _init_state():
         "vocabulary":           None,
         "db_connection_string": "",
         "vocab_yaml":           _default_vocab_yaml(),
-        "db_mode":              "Демо-база",
+        "db_mode":              None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -341,14 +315,18 @@ with st.sidebar:
     # ── База данных ──
     st.markdown('<p class="sb-label">База данных</p>', unsafe_allow_html=True)
 
+    _modes = ["Демо-база", "Загрузить файл", "Строка подключения"]
+    _prev  = st.session_state.db_mode
     db_mode = st.radio(
-        "db_mode",
-        ["Демо-база", "Загрузить файл", "Строка подключения"],
-        horizontal=True,
-        index=["Демо-база", "Загрузить файл", "Строка подключения"].index(
-            st.session_state.db_mode
-        ),
+        "Источник данных",
+        _modes,
+        index=_modes.index(_prev) if _prev in _modes else None,
+        label_visibility="collapsed",
     )
+    if db_mode != _prev:
+        # При смене режима сбрасываем подключение
+        st.session_state.db_connector  = None
+        st.session_state.db_executor   = None
     st.session_state.db_mode = db_mode
 
     cs = ""
@@ -435,14 +413,6 @@ with st.sidebar:
         vocab_dialog()
 
 
-# ──────────────────────────────────────────────
-# Автоподключение демо-базы при первом запуске
-# ──────────────────────────────────────────────
-if (
-    st.session_state.db_mode == "Демо-база"
-    and st.session_state.db_connector is None
-):
-    _auto_connect_demo()
 
 
 # ──────────────────────────────────────────────
