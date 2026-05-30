@@ -1,23 +1,25 @@
-"""SqlExecutor -- vypolnyaet SQL-zapros na podklyuchennoy BD i vozvraschaet rezultat.
+"""SqlExecutor — выполняет SQL-запрос на подключённой БД.
 
-Primer:
-    executor = SqlExecutor("sqlite:///data/demo/sales.sqlite")
-    result = executor.run("SELECT SUM(amount) FROM orders WHERE status='paid'")
-    print(result.columns)
-    print(result.rows)
+Для SQLite соединение открывается через URI с ``mode=ro&immutable=1`` —
+это обеспечивает read-only без копирования файла и режет любые попытки
+выполнить DDL/DML на уровне драйвера. Для PostgreSQL/MySQL отдельный
+guardrail остаётся на стороне API (см. is_select_only в postprocess.py).
 """
 
 from __future__ import annotations
 
+import logging
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class QueryResult:
-    """Rezultat vypolneniya SQL-zaprosa."""
+    """Результат выполнения SQL-запроса."""
     columns: list[str]
     rows: list[list]
     row_count: int
@@ -39,9 +41,9 @@ class QueryResult:
 
     def to_markdown_table(self) -> str:
         if self.error:
-            return f"Oshibka: {self.error}"
+            return f"Ошибка: {self.error}"
         if not self.rows:
-            return "(pustoy rezultat)"
+            return "(пустой результат)"
         header = " | ".join(self.columns)
         sep = " | ".join(["---"] * len(self.columns))
         rows = "\n".join(" | ".join(str(v) for v in row) for row in self.rows)
@@ -49,7 +51,7 @@ class QueryResult:
 
 
 class SqlExecutor:
-    """Vypolnyaet SQL na podklyuchennoy BD."""
+    """Выполняет SQL на подключённой БД."""
 
     MAX_ROWS = 500
 
@@ -67,13 +69,14 @@ class SqlExecutor:
                 return self._run_mysql(sql)
             else:
                 return QueryResult(columns=[], rows=[], row_count=0, sql=sql,
-                                   error=f"Neizvestnyy tip BD: {self._db_type}")
-        except Exception as e:
+                                   error=f"Неизвестный тип БД: {self._db_type}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Ошибка выполнения SQL: %s", e)
             return QueryResult(columns=[], rows=[], row_count=0, sql=sql, error=str(e))
 
     def _run_sqlite(self, sql: str) -> QueryResult:
-        path = self._safe_sqlite_path(self._sqlite_path())
-        conn = sqlite3.connect(str(path))
+        path = self._sqlite_path()
+        conn = sqlite3.connect(self._sqlite_uri(path), uri=True)
         conn.text_factory = lambda b: b.decode("utf-8", errors="replace")
         try:
             cur = conn.cursor()
@@ -88,10 +91,12 @@ class SqlExecutor:
         try:
             import psycopg2  # type: ignore
         except ImportError as e:
-            raise ImportError("Ustanovi psycopg2: pip install psycopg2-binary") from e
+            raise ImportError("Установи psycopg2: pip install psycopg2-binary") from e
 
         conn = psycopg2.connect(self.connection_string)
         try:
+            # Транзакция в режиме READ ONLY — guardrail драйверного уровня.
+            conn.set_session(readonly=True, autocommit=False)
             cur = conn.cursor()
             cur.execute(sql)
             cols = [d[0] for d in (cur.description or [])]
@@ -104,7 +109,7 @@ class SqlExecutor:
         try:
             import pymysql  # type: ignore
         except ImportError as e:
-            raise ImportError("Ustanovi pymysql: pip install pymysql") from e
+            raise ImportError("Установи pymysql: pip install pymysql") from e
 
         parsed = urlparse(self.connection_string)
         conn = pymysql.connect(
@@ -116,6 +121,9 @@ class SqlExecutor:
         )
         try:
             cur = conn.cursor()
+            # MySQL не имеет «глобального» read-only флага в драйвере,
+            # но мы можем стартовать read-only-транзакцию.
+            cur.execute("START TRANSACTION READ ONLY")
             cur.execute(sql)
             cols = [d[0] for d in (cur.description or [])]
             rows = [list(r) for r in cur.fetchmany(self.MAX_ROWS)]
@@ -130,16 +138,9 @@ class SqlExecutor:
         return Path(cs)
 
     @staticmethod
-    def _safe_sqlite_path(path: Path) -> Path:
-        import shutil
-        import tempfile
-        journal = Path(str(path) + "-journal")
-        wal = Path(str(path) + "-wal")
-        if journal.exists() or wal.exists():
-            tmp = Path(tempfile.mktemp(suffix=".sqlite"))
-            shutil.copy2(path, tmp)
-            return tmp
-        return path
+    def _sqlite_uri(path: Path) -> str:
+        """Read-only URI для SQLite с игнорированием journal/WAL."""
+        return f"file:{path}?mode=ro&immutable=1"
 
     @staticmethod
     def _detect_type(cs: str) -> str:
@@ -149,4 +150,4 @@ class SqlExecutor:
             return "postgresql"
         if cs.startswith("mysql"):
             return "mysql"
-        raise ValueError(f"Ne udalos opredelit tip BD: {cs}")
+        raise ValueError(f"Не удалось определить тип БД: {cs}")

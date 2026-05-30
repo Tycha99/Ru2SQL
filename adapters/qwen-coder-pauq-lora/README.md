@@ -1,199 +1,136 @@
 ---
-library_name: transformers
-tags: []
+library_name: peft
+base_model: Qwen/Qwen2.5-Coder-3B-Instruct
+language:
+  - ru
+tags:
+  - text-to-sql
+  - qlora
+  - russian
+  - sql-generation
+license: apache-2.0
+datasets:
+  - ai-forever/PAUQ
 ---
 
-# Model Card for Model ID
-
-<!-- Provide a quick summary of what the model is/does. -->
-
-
-
-## Model Details
-
-### Model Description
-
-<!-- Provide a longer summary of what this model is. -->
-
-This is the model card of a 🤗 transformers model that has been pushed on the Hub. This model card has been automatically generated.
-
-- **Developed by:** [More Information Needed]
-- **Funded by [optional]:** [More Information Needed]
-- **Shared by [optional]:** [More Information Needed]
-- **Model type:** [More Information Needed]
-- **Language(s) (NLP):** [More Information Needed]
-- **License:** [More Information Needed]
-- **Finetuned from model [optional]:** [More Information Needed]
-
-### Model Sources [optional]
-
-<!-- Provide the basic links for the model. -->
-
-- **Repository:** [More Information Needed]
-- **Paper [optional]:** [More Information Needed]
-- **Demo [optional]:** [More Information Needed]
-
-## Uses
-
-<!-- Address questions around how the model is intended to be used, including the foreseeable users of the model and those affected by the model. -->
-
-### Direct Use
-
-<!-- This section is for the model use without fine-tuning or plugging into a larger ecosystem/app. -->
-
-[More Information Needed]
-
-### Downstream Use [optional]
-
-<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
-
-[More Information Needed]
-
-### Out-of-Scope Use
-
-<!-- This section addresses misuse, malicious use, and uses that the model will not work well for. -->
-
-[More Information Needed]
-
-## Bias, Risks, and Limitations
-
-<!-- This section is meant to convey both technical and sociotechnical limitations. -->
-
-[More Information Needed]
-
-### Recommendations
-
-<!-- This section is meant to convey recommendations with respect to the bias, risk, and technical limitations. -->
-
-Users (both direct and downstream) should be made aware of the risks, biases and limitations of the model. More information needed for further recommendations.
-
-## How to Get Started with the Model
-
-Use the code below to get started with the model.
-
-[More Information Needed]
-
-## Training Details
-
-### Training Data
-
-<!-- This should link to a Dataset Card, perhaps with a short stub of information on what the training data is all about as well as documentation related to data pre-processing or additional filtering. -->
-
-[More Information Needed]
-
-### Training Procedure
-
-<!-- This relates heavily to the Technical Specifications. Content here should link to that section when it is relevant to the training procedure. -->
-
-#### Preprocessing [optional]
-
-[More Information Needed]
-
-
-#### Training Hyperparameters
-
-- **Training regime:** [More Information Needed] <!--fp32, fp16 mixed precision, bf16 mixed precision, bf16 non-mixed precision, fp16 non-mixed precision, fp8 mixed precision -->
-
-#### Speeds, Sizes, Times [optional]
-
-<!-- This section provides information about throughput, start/end time, checkpoint size if relevant, etc. -->
-
-[More Information Needed]
-
-## Evaluation
-
-<!-- This section describes the evaluation protocols and provides the results. -->
-
-### Testing Data, Factors & Metrics
-
-#### Testing Data
-
-<!-- This should link to a Dataset Card if possible. -->
-
-[More Information Needed]
-
-#### Factors
-
-<!-- These are the things the evaluation is disaggregating by, e.g., subpopulations or domains. -->
-
-[More Information Needed]
-
-#### Metrics
-
-<!-- These are the evaluation metrics being used, ideally with a description of why. -->
-
-[More Information Needed]
-
-### Results
-
-[More Information Needed]
-
-#### Summary
-
-
-
-## Model Examination [optional]
-
-<!-- Relevant interpretability work for the model goes here -->
-
-[More Information Needed]
-
-## Environmental Impact
-
-<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
-
-Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) presented in [Lacoste et al. (2019)](https://arxiv.org/abs/1910.09700).
-
-- **Hardware Type:** [More Information Needed]
-- **Hours used:** [More Information Needed]
-- **Cloud Provider:** [More Information Needed]
-- **Compute Region:** [More Information Needed]
-- **Carbon Emitted:** [More Information Needed]
-
-## Technical Specifications [optional]
-
-### Model Architecture and Objective
-
-[More Information Needed]
-
-### Compute Infrastructure
-
-[More Information Needed]
-
-#### Hardware
-
-[More Information Needed]
-
-#### Software
-
-[More Information Needed]
-
-## Citation [optional]
-
-<!-- If there is a paper or blog post introducing the model, the APA and Bibtex information for that should go in this section. -->
-
-**BibTeX:**
-
-[More Information Needed]
-
-**APA:**
-
-[More Information Needed]
-
-## Glossary [optional]
-
-<!-- If relevant, include terms and calculations in this section that can help readers understand the model or model card. -->
-
-[More Information Needed]
-
-## More Information [optional]
-
-[More Information Needed]
-
-## Model Card Authors [optional]
-
-[More Information Needed]
-
-## Model Card Contact
-
-[More Information Needed]
+# qwen-coder-pauq-lora
+
+LoRA-адаптер для модели **Qwen2.5-Coder-3B-Instruct**, обученный методом
+**QLoRA** на датасете **PAUQ** для задачи преобразования вопросов на
+русском языке в SQL-запросы. Часть выпускной квалификационной работы
+по направлению 09.03.04 «Программная инженерия», КНИТУ-КАИ.
+
+## Описание
+
+Адаптер обучает модель отвечать на русскоязычный аналитический вопрос
+синтаксически корректным SQL-запросом, учитывая схему конкретной базы
+данных, переданную в системном сообщении вместе с примерами строк.
+
+Базовая модель остаётся замороженной, обучаются только LoRA-матрицы
+рангом 16, наложенные на все проекционные слои attention и MLP. Это
+позволяет хранить и распространять адаптер размером несколько десятков
+мегабайт, а не полные веса модели в несколько гигабайт.
+
+## Использование
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+base = "Qwen/Qwen2.5-Coder-3B-Instruct"
+adapter = "Tyycha/qwen-coder-pauq-lora"
+
+tokenizer = AutoTokenizer.from_pretrained(base)
+model = AutoModelForCausalLM.from_pretrained(base, device_map="auto")
+model = PeftModel.from_pretrained(model, adapter)
+model.eval()
+
+messages = [
+    {"role": "system", "content": "Ты — ассистент, который преобразует вопросы на русском языке в SQL..."},
+    {"role": "user", "content": "### Schema:\nCREATE TABLE orders (id INT, amount REAL, status TEXT);\n\n### Question:\nКакая суммарная выручка по оплаченным заказам?\n\n### SQL:\n"},
+]
+prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+output = model.generate(**inputs, max_new_tokens=256, do_sample=False)
+print(tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
+```
+
+Полный pipeline (формирование промпта, постобработка, исполнение SQL)
+реализован в проекте [Ru2SQL](https://github.com/Tyycha/Ru2SQL).
+
+## Данные
+
+- **Датасет:** PAUQ (Bakshandaeva et al., 2022) — первый крупный русскоязычный
+  корпус для задачи Text-to-SQL, построенный на основе Spider.
+- **Размер:** ~7 тыс. пар (вопрос, SQL) в train, 1076 в dev.
+- **Структура примера:** диалог в формате chat-template из трёх сообщений
+  (`system` с инструкцией и опциональным бизнес-словарём, `user` со
+  схемой и вопросом, `assistant` с эталонным SQL).
+
+## Гиперпараметры обучения
+
+| Параметр | Значение |
+|---|---|
+| Базовая модель | Qwen/Qwen2.5-Coder-3B-Instruct |
+| Метод | QLoRA (NF4, double quantization, compute dtype = bfloat16) |
+| LoRA rank `r` | 16 |
+| LoRA alpha | 32 |
+| LoRA dropout | 0.05 |
+| Target modules | q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj |
+| Эпохи | 2 |
+| Размер батча | 1 (на устройство) |
+| Накопление градиентов | 8 шагов (эффективный батч 8) |
+| Скорость обучения | 2e-4 (cosine, warmup 3 %) |
+| Max sequence length | 1024 |
+| Точность | bfloat16 |
+| Оборудование | NVIDIA Tesla T4 16 GB (Kaggle) |
+
+## Метрики
+
+Оценка на валидационной выборке PAUQ (1076 примеров, 166 баз данных):
+
+| Метрика | Значение |
+|---|---|
+| Exact Match (EM) | 40.0 % (430 / 1076) |
+| Execution Accuracy (EX) | 71.9 % (772 / 1074) |
+
+Для сравнения, опубликованные результаты на той же выборке:
+
+| Модель | EM | EX |
+|---|---|---|
+| RAT-SQL (PAUQ, mono) | 51 % | 49 % |
+| BRIDGE (PAUQ, mono) | 52 % | 48 % |
+| **Qwen2.5-Coder-3B + QLoRA (эта работа)** | **40 %** | **71.9 %** |
+
+Высокий разрыв между EM и EX отражает специфику задачи: модель
+генерирует семантически корректные запросы, но синтаксически
+отличающиеся от эталонных (другой порядок условий, альтернативные
+JOIN-стратегии, иные псевдонимы).
+
+## Ограничения
+
+- Модель обучена на схемах PAUQ/Spider. На существенно отличающихся
+  предметных областях качество может падать; для адаптации
+  предусмотрен механизм бизнес-словаря в основном проекте.
+- Наиболее сложные классы запросов — вложенные SELECT, конструкции
+  INTERSECT/EXCEPT/UNION, HAVING с несколькими условиями — остаются
+  слабым местом.
+- При работе на CPU без GPU инференс занимает 15–30 секунд на запрос.
+- Адаптер ориентирован на SQLite. Для PostgreSQL/MySQL рекомендуется
+  явно указать диалект в промпте.
+
+## Лицензия
+
+Apache 2.0. Базовая модель Qwen2.5-Coder также распространяется под
+лицензией Apache 2.0; датасет PAUQ — Apache 2.0.
+
+## Цитирование
+
+```bibtex
+@misc{ru2sql-qlora-2026,
+  title  = {Ru2SQL: Russian Text-to-SQL via QLoRA on Qwen2.5-Coder},
+  author = {Siryazeev, Danis},
+  year   = {2026},
+  note   = {Bachelor's thesis, Kazan National Research Technical University},
+}
+```

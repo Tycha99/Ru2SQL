@@ -1,11 +1,11 @@
-"""DbConnector -- podklyuchenie k proizvolnoy baze dannykh i chtenie skhemy.
+"""DbConnector — подключение к произвольной БД и чтение схемы.
 
-Podderzhivaemye tipy BD:
-    SQLite     -- put k faylu: "sqlite:///path/to/db.sqlite" ili prosto put
-    PostgreSQL -- "postgresql://user:pass@host:port/dbname"  (trebuet psycopg2)
-    MySQL      -- "mysql://user:pass@host:port/dbname"       (trebuet pymysql)
+Поддерживаемые типы БД:
+    SQLite     — путь к файлу: "sqlite:///path/to/db.sqlite" или просто путь
+    PostgreSQL — "postgresql://user:pass@host:port/dbname" (требует psycopg2)
+    MySQL      — "mysql://user:pass@host:port/dbname"      (требует pymysql)
 
-Primer:
+Пример:
     conn = DbConnector("sqlite:///data/demo/sales.sqlite")
     print(conn.render_schema())
     tables = conn.list_tables()
@@ -13,10 +13,13 @@ Primer:
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,7 +37,7 @@ class TableInfo:
     sample_rows: list[tuple] = field(default_factory=list)
 
     def to_ddl(self) -> str:
-        """Generiruet CREATE TABLE statement iz metadannykh."""
+        """Генерирует CREATE TABLE statement из метаданных."""
         col_parts = []
         for col in self.columns:
             line = f"    {col.name} {col.type}"
@@ -47,7 +50,7 @@ class TableInfo:
 
 
 class DbConnector:
-    """Universalnyy konektor k BD. Umeet chitat skhemu dlya podstanovki v prompt."""
+    """Универсальный коннектор к БД. Читает схему для подстановки в промпт."""
 
     def __init__(self, connection_string: str, n_sample_rows: int = 2):
         self.connection_string = self._normalize(connection_string)
@@ -66,7 +69,7 @@ class DbConnector:
         for t in tables:
             parts.append(t.to_ddl())
             if include_samples and t.sample_rows:
-                parts.append(f"-- Primery strok iz {t.name}:")
+                parts.append(f"-- Примеры строк из {t.name}:")
                 for row in t.sample_rows:
                     parts.append(f"--   {row}")
             parts.append("")
@@ -76,7 +79,8 @@ class DbConnector:
         try:
             self._get_tables(n_sample_rows=0)
             return True
-        except Exception:
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Подключение к БД не удалось: %s", e)
             return False
 
     def _get_tables(self, n_sample_rows: int) -> list[TableInfo]:
@@ -87,11 +91,19 @@ class DbConnector:
         elif self._db_type == "mysql":
             return self._get_tables_mysql(n_sample_rows)
         else:
-            raise ValueError(f"Neizvestnyy tip BD: {self._db_type}")
+            raise ValueError(f"Неизвестный тип БД: {self._db_type}")
 
     def _get_tables_sqlite(self, n_sample_rows: int) -> list[TableInfo]:
-        path = self._safe_sqlite_path(self._sqlite_path())
-        conn = sqlite3.connect(str(path))
+        """SQLite-подключение в режиме read-only через URI.
+
+        immutable=1 говорит SQLite, что файл не изменяется во время сессии,
+        поэтому journal/WAL-файлы можно игнорировать. Это убирает прежнюю
+        логику с копированием БД во временную директорию и заодно даёт
+        guardrail-уровень безопасности: любая модифицирующая операция
+        на таком соединении завершится ошибкой.
+        """
+        path = self._sqlite_path()
+        conn = sqlite3.connect(self._sqlite_uri(path), uri=True)
         conn.text_factory = lambda b: b.decode("utf-8", errors="replace")
         try:
             cur = conn.cursor()
@@ -118,8 +130,9 @@ class DbConnector:
                     try:
                         cur.execute(f'SELECT * FROM "{name}" LIMIT {n_sample_rows}')
                         samples = cur.fetchall()
-                    except sqlite3.Error:
-                        pass
+                    except sqlite3.Error as e:
+                        logger.debug("Не удалось получить sample-строки для %s: %s",
+                                     name, e)
                 tables.append(TableInfo(name=name, columns=cols, sample_rows=samples))
             return tables
         finally:
@@ -129,7 +142,7 @@ class DbConnector:
         try:
             import psycopg2  # type: ignore
         except ImportError as e:
-            raise ImportError("Ustanovi psycopg2: pip install psycopg2-binary") from e
+            raise ImportError("Установи psycopg2: pip install psycopg2-binary") from e
 
         conn = psycopg2.connect(self.connection_string)
         try:
@@ -166,7 +179,7 @@ class DbConnector:
         try:
             import pymysql  # type: ignore
         except ImportError as e:
-            raise ImportError("Ustanovi pymysql: pip install pymysql") from e
+            raise ImportError("Установи pymysql: pip install pymysql") from e
 
         parsed = urlparse(self.connection_string)
         conn = pymysql.connect(
@@ -207,22 +220,22 @@ class DbConnector:
         return Path(cs)
 
     @staticmethod
-    def _safe_sqlite_path(path: Path) -> Path:
-        """Esli ryadom s BD est journal-fayl, kopируем fayl vo vremennuyu direktoriu."""
-        import shutil
-        import tempfile
-        journal = Path(str(path) + "-journal")
-        wal = Path(str(path) + "-wal")
-        if journal.exists() or wal.exists():
-            tmp = Path(tempfile.mktemp(suffix=".sqlite"))
-            shutil.copy2(path, tmp)
-            return tmp
-        return path
+    def _sqlite_uri(path: Path) -> str:
+        """Read-only URI для SQLite с игнорированием journal/WAL."""
+        return f"file:{path}?mode=ro&immutable=1"
 
     @staticmethod
     def _normalize(cs: str) -> str:
-        """Esli peredan prosto put k faylu -- prevraschaem v sqlite:// URI."""
+        """Если передан просто путь к файлу — превращаем в sqlite:// URI.
+
+        Если строка уже выглядит как URI (sqlite/postgres/mysql) —
+        возвращаем как есть. Без этой проверки сценарий «передали
+        корректный sqlite:///path» приводил к двойной нормализации
+        и подключению к несуществующему пути.
+        """
         cs = cs.strip()
+        if cs.startswith(("sqlite:", "postgres", "mysql")):
+            return cs
         if cs.endswith(".sqlite") or cs.endswith(".db"):
             return f"sqlite:///{cs}"
         return cs
@@ -235,4 +248,4 @@ class DbConnector:
             return "postgresql"
         if cs.startswith("mysql"):
             return "mysql"
-        raise ValueError(f"Ne udalos opredelit tip BD: {cs}")
+        raise ValueError(f"Не удалось определить тип БД: {cs}")

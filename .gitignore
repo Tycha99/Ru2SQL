@@ -68,3 +68,7 @@ htmlcov/
 # Outputs
 outputs/
 results/
+
+# Документы ВКР
+*.docx
+*.pptx

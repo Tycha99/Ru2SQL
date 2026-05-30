@@ -1,9 +1,12 @@
-import os
-import sys
+"""Устаревший модуль.
 
-# Запускаем основное приложение из корня проекта
-root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-os.chdir(root)
-sys.path.insert(0, root)
+Точка входа Streamlit-приложения — ``streamlit_app.py`` в корне проекта.
+Запуск:
 
-exec(open(os.path.join(root, "streamlit_app.py")).read())
+    streamlit run streamlit_app.py
+
+Этот файл оставлен пустым ради обратной совместимости import-путей.
+Ранее здесь была обёртка через ``exec(open(...).read())``, которая
+запускала UI как побочный эффект импорта пакета ``src`` — что ломало
+сбор тестов и статический анализ. Хак удалён.
+"""
