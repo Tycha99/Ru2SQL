@@ -1,16 +1,34 @@
+# Runtime-зависимости Ru2SQL. Используются Dockerfile (HF Spaces)
+# и любым окружением без uv. Должны быть в синхронизации с pyproject.toml.
+
+# API
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.4.0
+
+# UI
 streamlit>=1.35.0
+
+# SQL parsing / validation
+sqlglot>=25.0.0
+
+# Data
+pandas>=2.2.0
+
+# ML inference
 torch>=2.3.0
 transformers>=4.44.0
 accelerate>=0.33.0
 peft>=0.12.0
-pydantic>=2.7.0
-pydantic-settings>=2.4.0
-sqlglot>=25.0.0
-pandas>=2.2.0
+
+# Misc
 python-dotenv>=1.0.0
 huggingface_hub>=1.0.0
 pyyaml>=6.0
 tqdm>=4.66.0
 httpx>=0.27.0
+
+# Опциональные коннекторы к боевым БД
 psycopg2-binary>=2.9.0
 pymysql>=1.1.0
